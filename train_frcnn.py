@@ -10,26 +10,25 @@ import pickle
 import os
 
 import tensorflow as tf
-from keras import backend as K
-from keras.optimizers import Adam, SGD, RMSprop
-from keras.layers import Input
-from keras.models import Model
+from tensorflow.keras import backend as K
+from tensorflow.keras.optimizers import Adam, SGD, RMSprop
+from tensorflow.keras.layers import Input
+from tensorflow.keras.models import Model
 from keras_frcnn import config, data_generators
 from keras_frcnn import losses as losses
 import keras_frcnn.roi_helpers as roi_helpers
-from keras.utils import generic_utils
-from keras.callbacks import TensorBoard
+from tensorflow.python.keras.utils import generic_utils
+from tensorflow.keras.callbacks import TensorBoard
 
 
 # tensorboard 로그 작성 함수
-def write_log(callback, names, logs, batch_no):
-    for name, value in zip(names, logs):
-        summary = tf.Summary()
-        summary_value = summary.value.add()
-        summary_value.simple_value = value
-        summary_value.tag = name
-        callback.writer.add_summary(summary, batch_no)
-        callback.writer.flush()
+def write_log(log_dir, names, logs, batch_no):
+    writer = tf.summary.create_file_writer(log_dir)
+    with writer.as_default():
+        for name, value in zip(names, logs):
+              tf.summary.scalar(name, value, batch_no)
+              writer.flush()
+        
 
 sys.setrecursionlimit(40000)
 
@@ -85,6 +84,9 @@ elif options.network == 'xception':
 elif options.network == 'inception_resnet_v2':
     from keras_frcnn import inception_resnet_v2 as nn
     C.network = 'inception_resnet_v2'
+elif options.network == 'md_inception_resnet_v2':
+    from keras_frcnn import md_inception_resnet_v2 as nn
+    C.network = 'md_inception_resnet_v2'
 else:
     print('Not a valid model')
     raise ValueError
@@ -99,10 +101,10 @@ else:
 # parser에서 이미지, 클래스, 클래스 맵핑 정보 가져오기
 all_imgs, classes_count, class_mapping = get_data(options.train_path)
 
-# bg 클래스 추가
-if 'bg' not in classes_count:
-    classes_count['bg'] = 0
-    class_mapping['bg'] = len(class_mapping)
+## bg 클래스 추가
+#if 'bg' not in classes_count:
+#    classes_count['bg'] = 0
+#    class_mapping['bg'] = len(class_mapping)
 
 C.class_mapping = class_mapping
 
@@ -129,10 +131,11 @@ print('Num train samples {}'.format(len(train_imgs)))
 print('Num test samples {}'.format(len(test_imgs)))
 
 # groundtruth anchor 데이터 가져오기
-data_gen_train = data_generators.get_anchor_gt(train_imgs, classes_count, C, nn.get_img_output_length, K.image_dim_ordering(), mode='train')
-data_gen_test = data_generators.get_anchor_gt(test_imgs, classes_count, C, nn.get_img_output_length, K.image_dim_ordering(), mode='test')
+data_gen_train = data_generators.get_anchor_gt(train_imgs, classes_count, C, nn.get_img_output_length, K.image_data_format(), mode='train')
+data_gen_test = data_generators.get_anchor_gt(test_imgs, classes_count, C, nn.get_img_output_length, K.image_data_format(), mode='test')
 
-if K.image_dim_ordering() == 'th':
+#if K.image_dim_ordering() == 'th':
+if K.image_data_format() == 'channels_first':
     input_shape_img = (3, None, None)
 else:
     input_shape_img = (None, None, 3)
@@ -180,11 +183,11 @@ log_path = './logs'
 if not os.path.isdir(log_path):
     os.mkdir(log_path)
 
-# Tensorboard log모델 연결
-callback = TensorBoard(log_path)
-callback.set_model(model_all)
+## Tensorboard log모델 연결
+#callback = TensorBoard(log_path)
+#callback.set_model(model_all)
 
-epoch_length = 1000
+epoch_length = 100
 num_epochs = int(options.num_epochs)
 iter_num = 0
 train_step = 0
@@ -220,11 +223,11 @@ for epoch_num in range(num_epochs):
         X, Y, img_data = next(data_gen_train)
 
         loss_rpn = model_rpn.train_on_batch(X, Y)
-        write_log(callback, ['rpn_cls_loss', 'rpn_reg_loss'], loss_rpn, train_step)
+        write_log(log_path, ['rpn_cls_loss', 'rpn_reg_loss'], loss_rpn, train_step)
 
         P_rpn = model_rpn.predict_on_batch(X)
 
-        R = roi_helpers.rpn_to_roi(P_rpn[0], P_rpn[1], C, K.image_dim_ordering(), use_regr=True, overlap_thresh=0.7, max_boxes=300)
+        R = roi_helpers.rpn_to_roi(P_rpn[0], P_rpn[1], C, K.image_data_format(), use_regr=True, overlap_thresh=0.7, max_boxes=300)
         # note: calc_iou converts from (x1,y1,x2,y2) to (x,y,w,h) format
         X2, Y1, Y2, IouS = roi_helpers.calc_iou(R, img_data, C, class_mapping)
 
@@ -280,7 +283,7 @@ for epoch_num in range(num_epochs):
                 sel_samples = random.choice(pos_samples)
 
         loss_class = model_classifier.train_on_batch([X, X2[:, sel_samples, :]], [Y1[:, sel_samples, :], Y2[:, sel_samples, :]])
-        write_log(callback, ['detection_cls_loss', 'detection_reg_loss', 'detection_acc'], loss_class, train_step)
+        write_log(log_path, ['detection_cls_loss', 'detection_reg_loss', 'detection_acc'], loss_class, train_step)
         train_step += 1
 
         losses[iter_num, 0] = loss_rpn[1]
@@ -318,7 +321,7 @@ for epoch_num in range(num_epochs):
             iter_num = 0
             start_time = time.time()
 
-            write_log(callback,
+            write_log(log_path,
                       ['Elapsed_time', 'mean_overlapping_bboxes', 'mean_rpn_cls_loss', 'mean_rpn_reg_loss',
                        'mean_detection_cls_loss', 'mean_detection_reg_loss', 'mean_detection_acc', 'total_loss'],
                       [time.time() - start_time, mean_overlapping_bboxes, loss_rpn_cls, loss_rpn_regr,

@@ -44,6 +44,8 @@ elif C.network == 'xception':
     import keras_frcnn.xception as nn
 elif C.network == 'inception_resnet_v2':
     import keras_frcnn.inception_resnet_v2 as nn
+elif C.network == 'md_inception_resnet_v2':
+    import keras_frcnn.md_inception_resnet_v2 as nn
 elif C.network == 'vgg':
     import keras_frcnn.vgg as nn
 
@@ -113,6 +115,8 @@ if C.network == 'resnet50':
 elif C.network == 'xception':
     num_features = 1024
 elif C.network == 'inception_resnet_v2':
+    num_features = 1088
+elif C.network == 'md_inception_resnet_v2':
     num_features = 1088
 elif C.network == 'vgg':
     num_features = 512

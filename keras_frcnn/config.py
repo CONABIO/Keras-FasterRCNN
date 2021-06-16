@@ -1,4 +1,4 @@
-from keras import backend as K
+from tensorflow.keras import backend as K
 
 
 class Config:
@@ -8,7 +8,7 @@ class Config:
         self.verbose = True
 
         # base CNN model
-        self.network = 'inception_resnet_v2'
+        self.network = 'md_inception_resnet_v2'
 
         # setting for data augmentation
         self.use_horizontal_flips = False
@@ -32,7 +32,7 @@ class Config:
         self.num_rois = 300
 
         # stride at the RPN (this depends on the network configuration)
-        self.rpn_stride = 16
+        self.rpn_stride = 8
 
         self.balanced_classes = False
 
@@ -55,4 +55,4 @@ class Config:
         # weight files can be found at:
         # https://github.com/fchollet/deep-learning-models/releases/download/v0.2/resnet50_weights_th_dim_ordering_th_kernels_notop.h5
 
-        self.model_path = 'model_frcnn.{}.hdf5'.format(self.network)
+        self.model_path = 'model_md_frcnn.{}.hdf5'.format(self.network)
